@@ -1,0 +1,10 @@
+{
+	"name": "@kirdes/pi-minimal-shell",
+	"private": true,
+	"type": "module",
+	"pi": {
+		"extensions": [
+			"./index.ts"
+		]
+	}
+}

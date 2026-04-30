@@ -1,0 +1,4 @@
+node_modules
+.bun
+.DS_Store
+*.log

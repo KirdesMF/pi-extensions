@@ -1,0 +1,10 @@
+{
+	"name": "@kirdes/pi-mac-system-theme",
+	"private": true,
+	"type": "module",
+	"pi": {
+		"extensions": [
+			"./index.ts"
+		]
+	}
+}

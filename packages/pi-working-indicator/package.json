@@ -1,0 +1,10 @@
+{
+	"name": "@kirdes/pi-working-indicator",
+	"private": true,
+	"type": "module",
+	"pi": {
+		"extensions": [
+			"./index.ts"
+		]
+	}
+}

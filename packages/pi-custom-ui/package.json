@@ -1,0 +1,10 @@
+{
+	"name": "@kirdes/pi-custom-ui",
+	"private": true,
+	"type": "module",
+	"pi": {
+		"extensions": [
+			"./index.ts"
+		]
+	}
+}
