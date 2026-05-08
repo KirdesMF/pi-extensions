@@ -2,12 +2,12 @@ import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import type { Theme } from "@mariozechner/pi-coding-agent";
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
 	buildSessionContext,
 	type ExtensionAPI,
 	type ExtensionContext,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 
 type UsageWindow = {
 	label: string;
@@ -29,6 +29,10 @@ type GitInfo = {
 
 type TuiHandle = {
 	requestRender(): void;
+};
+
+type FooterData = {
+	getExtensionStatuses(): ReadonlyMap<string, string>;
 };
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape sequence
@@ -112,11 +116,6 @@ function normalizePercent(value: number): number {
 	return clampPercent(value);
 }
 
-function normalizeRatio(value: number): number {
-	if (!Number.isFinite(value)) return 0;
-	return clampPercent(value * 100);
-}
-
 function getWindowLabel(
 	durationMs: number | undefined,
 	fallback: string,
@@ -198,35 +197,6 @@ function getCodexToken(): { token: string; accountId?: string } | null {
 		}
 	} catch {}
 	return null;
-}
-
-function getClaudeToken(): string | null {
-	const auth = loadAuthJson();
-	const anthropic = auth.anthropic as { access?: string } | undefined;
-	if (anthropic?.access) return anthropic.access;
-	return null;
-}
-
-function getCopilotToken(): string | null {
-	const auth = loadAuthJson();
-	const copilot = auth["github-copilot"] as { refresh?: string } | undefined;
-	return copilot?.refresh ?? null;
-}
-
-function getGeminiToken(): string | null {
-	const auth = loadAuthJson();
-	const gemini = auth["google-gemini-cli"] as { access?: string } | undefined;
-	if (gemini?.access) return gemini.access;
-	const geminiPath = join(homedir(), ".gemini", "oauth_creds.json");
-	if (!existsSync(geminiPath)) return null;
-	try {
-		const data = JSON.parse(readFileSync(geminiPath, "utf8")) as {
-			access_token?: string;
-		};
-		return data.access_token ?? null;
-	} catch {
-		return null;
-	}
 }
 
 async function fetchWithTimeout(
@@ -330,241 +300,28 @@ async function fetchCodexUsage(): Promise<UsageSnapshot> {
 	}
 }
 
-async function fetchClaudeUsage(): Promise<UsageSnapshot> {
-	const token = getClaudeToken();
-	if (!token)
-		return {
-			provider: "claude",
-			windows: [],
-			fetchedAt: Date.now(),
-			error: "no-auth",
-		};
-	try {
-		const response = await fetchWithTimeout(
-			"https://api.anthropic.com/api/oauth/usage",
-			{
-				headers: {
-					Authorization: `Bearer ${token}`,
-					"anthropic-beta": "oauth-2025-04-20",
-				},
-			},
-		);
-		if (!response.ok) {
-			return {
-				provider: "claude",
-				windows: [],
-				fetchedAt: Date.now(),
-				error: `HTTP ${response.status}`,
-			};
-		}
-		const data = (await response.json()) as {
-			five_hour?: { utilization?: number; resets_at?: string };
-			seven_day?: { utilization?: number; resets_at?: string };
-		};
-		const windows: UsageWindow[] = [];
-		if (data.five_hour) {
-			windows.push({
-				label: "5h",
-				usedPercent: normalizeRatio(data.five_hour.utilization ?? 0),
-				resetsIn: data.five_hour.resets_at
-					? formatResetTime(new Date(data.five_hour.resets_at))
-					: undefined,
-			});
-		}
-		if (data.seven_day) {
-			windows.push({
-				label: "week",
-				usedPercent: normalizeRatio(data.seven_day.utilization ?? 0),
-				resetsIn: data.seven_day.resets_at
-					? formatResetTime(new Date(data.seven_day.resets_at))
-					: undefined,
-			});
-		}
-		return { provider: "claude", windows, fetchedAt: Date.now() };
-	} catch (error) {
-		return {
-			provider: "claude",
-			windows: [],
-			fetchedAt: Date.now(),
-			error: String(error),
-		};
-	}
-}
-
-async function fetchCopilotUsage(): Promise<UsageSnapshot> {
-	const token = getCopilotToken();
-	if (!token)
-		return {
-			provider: "copilot",
-			windows: [],
-			fetchedAt: Date.now(),
-			error: "no-auth",
-		};
-	try {
-		const response = await fetchWithTimeout(
-			"https://api.github.com/copilot_internal/user",
-			{
-				headers: {
-					Authorization: `token ${token}`,
-					Accept: "application/json",
-					"User-Agent": "pi-minimal-shell",
-					"X-Github-Api-Version": "2025-04-01",
-					"Editor-Version": "vscode/1.96.2",
-				},
-			},
-		);
-		if (!response.ok) {
-			return {
-				provider: "copilot",
-				windows: [],
-				fetchedAt: Date.now(),
-				error: `HTTP ${response.status}`,
-			};
-		}
-		const data = (await response.json()) as {
-			quota_reset_date_utc?: string;
-			quota_snapshots?: {
-				premium_interactions?: { percent_remaining?: number };
-				chat?: { percent_remaining?: number; unlimited?: boolean };
-			};
-		};
-		const reset = data.quota_reset_date_utc
-			? formatResetTime(new Date(data.quota_reset_date_utc))
-			: undefined;
-		const windows: UsageWindow[] = [];
-		if (data.quota_snapshots?.premium_interactions) {
-			windows.push({
-				label: "premium",
-				usedPercent: normalizePercent(
-					100 -
-						(data.quota_snapshots.premium_interactions.percent_remaining ?? 0),
-				),
-				resetsIn: reset,
-			});
-		}
-		if (data.quota_snapshots?.chat && !data.quota_snapshots.chat.unlimited) {
-			windows.push({
-				label: "chat",
-				usedPercent: normalizePercent(
-					100 - (data.quota_snapshots.chat.percent_remaining ?? 0),
-				),
-				resetsIn: reset,
-			});
-		}
-		return { provider: "copilot", windows, fetchedAt: Date.now() };
-	} catch (error) {
-		return {
-			provider: "copilot",
-			windows: [],
-			fetchedAt: Date.now(),
-			error: String(error),
-		};
-	}
-}
-
-async function fetchGeminiUsage(): Promise<UsageSnapshot> {
-	const token = getGeminiToken();
-	if (!token)
-		return {
-			provider: "gemini",
-			windows: [],
-			fetchedAt: Date.now(),
-			error: "no-auth",
-		};
-	try {
-		const response = await fetchWithTimeout(
-			"https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota",
-			{
-				method: "POST",
-				headers: {
-					Authorization: `Bearer ${token}`,
-					"Content-Type": "application/json",
-				},
-				body: "{}",
-			},
-		);
-		if (!response.ok) {
-			return {
-				provider: "gemini",
-				windows: [],
-				fetchedAt: Date.now(),
-				error: `HTTP ${response.status}`,
-			};
-		}
-		const data = (await response.json()) as {
-			buckets?: Array<{ modelId?: string; remainingFraction?: number }>;
-		};
-		let proMin = 1;
-		let flashMin = 1;
-		let hasPro = false;
-		let hasFlash = false;
-		for (const bucket of data.buckets ?? []) {
-			const modelId = bucket.modelId?.toLowerCase() ?? "";
-			const fraction = bucket.remainingFraction ?? 1;
-			if (modelId.includes("pro")) {
-				hasPro = true;
-				proMin = Math.min(proMin, fraction);
-			}
-			if (modelId.includes("flash")) {
-				hasFlash = true;
-				flashMin = Math.min(flashMin, fraction);
-			}
-		}
-		const windows: UsageWindow[] = [];
-		if (hasPro)
-			windows.push({
-				label: "pro",
-				usedPercent: normalizePercent((1 - proMin) * 100),
-			});
-		if (hasFlash)
-			windows.push({
-				label: "flash",
-				usedPercent: normalizePercent((1 - flashMin) * 100),
-			});
-		return { provider: "gemini", windows, fetchedAt: Date.now() };
-	} catch (error) {
-		return {
-			provider: "gemini",
-			windows: [],
-			fetchedAt: Date.now(),
-			error: String(error),
-		};
-	}
-}
-
 async function fetchUsage(provider: string): Promise<UsageSnapshot> {
-	switch (provider) {
-		case "openai-codex":
-			return fetchCodexUsage();
-		case "anthropic":
-			return fetchClaudeUsage();
-		case "github-copilot":
-			return fetchCopilotUsage();
-		case "google-gemini-cli":
-			return fetchGeminiUsage();
-		default:
-			return {
-				provider,
-				windows: [],
-				fetchedAt: Date.now(),
-				error: "unsupported-provider",
-			};
+	if (provider === "openai-codex") {
+		return fetchCodexUsage();
 	}
+	return {
+		provider,
+		windows: [],
+		fetchedAt: Date.now(),
+		error: "unsupported-provider",
+	};
 }
 
 function getProviderLabel(provider: string | undefined): string {
-	switch (provider) {
-		case "openai-codex":
-			return "codex";
-		case "anthropic":
-			return "claude";
-		case "github-copilot":
-			return "copilot";
-		case "google-gemini-cli":
-			return "gemini";
-		default:
-			return provider ?? "model";
-	}
+	return provider === "openai-codex" ? "codex" : (provider ?? "model");
+}
+
+function isOpenCode(provider: string | undefined): boolean {
+	return provider?.startsWith("opencode") ?? false;
+}
+
+function renderLink(url: string, text: string): string {
+	return `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\`;
 }
 
 function getThinkingLevel(ctx: ExtensionContext | null): string {
@@ -725,11 +482,19 @@ function buildHeaderLine(
 function buildFooterLine(
 	width: number,
 	theme: Theme,
-	providerLabel: string,
+	provider: string | undefined,
 	usage: UsageSnapshot | null,
+	statuses: ReadonlyMap<string, string>,
 ): string {
 	const separator = theme.fg("dim", " > ");
-	const parts = [theme.fg("muted", providerLabel)];
+	const providerLabel = getProviderLabel(provider);
+	const providerPart = isOpenCode(provider)
+		? `${theme.fg("muted", `${providerLabel} => `)}${theme.fg("mdLinkUrl", renderLink("https://opencode.ai/auth", "dashboard"))}`
+		: theme.fg("muted", providerLabel);
+	const parts = [providerPart];
+	for (const status of statuses.values()) {
+		parts.push(status);
+	}
 	for (const window of usage?.windows ?? []) {
 		parts.push(renderUsageGauge(theme, window));
 	}
@@ -813,7 +578,7 @@ export default function minimalShellExtension(pi: ExtensionAPI) {
 			{ placement: "belowEditor" },
 		);
 
-		ctx.ui.setFooter((tui, theme) => {
+		ctx.ui.setFooter((tui, theme, footerData: FooterData) => {
 			footerTui = tui;
 			return {
 				dispose() {
@@ -825,8 +590,9 @@ export default function minimalShellExtension(pi: ExtensionAPI) {
 						buildFooterLine(
 							width,
 							theme,
-							getProviderLabel(activeProvider),
+							activeProvider,
 							usage,
+							footerData.getExtensionStatuses(),
 						),
 					];
 				},

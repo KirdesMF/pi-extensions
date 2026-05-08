@@ -1,8 +1,8 @@
 import type {
 	ExtensionAPI,
 	ExtensionContext,
-} from "@mariozechner/pi-coding-agent";
-import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
+import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
 
 const KEY = "rtk-rewrite";
 const DEFAULT_TIMEOUT_MS = 2000;

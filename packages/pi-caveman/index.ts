@@ -4,8 +4,8 @@ import { join } from "node:path";
 import type {
 	ExtensionAPI,
 	ExtensionContext,
-} from "@mariozechner/pi-coding-agent";
-import type { AutocompleteItem } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import type { AutocompleteItem } from "@earendil-works/pi-tui";
 
 const LEVELS = ["lite", "full", "ultra"] as const;
 type CavemanLevel = (typeof LEVELS)[number];
@@ -34,19 +34,15 @@ function normalizeMode(value: string | undefined): CavemanMode | null {
 	return null;
 }
 
-const MODE_RULES: Record<CavemanLevel, string> = {
-	lite: "No filler or hedging. Keep articles and full sentences. Professional but tight.",
-	full: "Drop articles, filler, pleasantries, hedging. Fragments OK. Short synonyms. Technical terms exact.",
-	ultra:
-		"Maximum compression. Abbreviate common tech terms. Use arrows for causality. Strip conjunctions. One word when enough.",
-};
-
-function buildPrompt(mode: CavemanLevel): string {
-	return `
-IMPORTANT: Caveman mode active for this turn. Level: ${mode}.
-Rules: Be terse. Keep technical accuracy. Code blocks, commits, and PR text stay normal. For security warnings or irreversible actions, be clear and unambiguous. Stop only if user says "stop caveman" or "normal mode".
-Mode rules: ${MODE_RULES[mode]}
-`;
+function getAutocompleteItems(prefix: string): AutocompleteItem[] | null {
+	const items: AutocompleteItem[] = [
+		...LEVELS.map((level) => ({ value: level, label: level })),
+		{ value: "off", label: "off" },
+	];
+	const filtered = items.filter((item) =>
+		item.value.startsWith(prefix.toLowerCase()),
+	);
+	return filtered.length > 0 ? filtered : null;
 }
 
 async function loadConfig(): Promise<CavemanConfig> {
@@ -62,17 +58,6 @@ async function loadConfig(): Promise<CavemanConfig> {
 		}
 	} catch {}
 	return { defaultMode: "full" };
-}
-
-function getAutocompleteItems(prefix: string): AutocompleteItem[] | null {
-	const items: AutocompleteItem[] = [
-		...LEVELS.map((level) => ({ value: level, label: level })),
-		{ value: "off", label: "off" },
-	];
-	const filtered = items.filter((item) =>
-		item.value.startsWith(prefix.toLowerCase()),
-	);
-	return filtered.length > 0 ? filtered : null;
 }
 
 export default function cavemanExtension(pi: ExtensionAPI) {
@@ -93,9 +78,11 @@ export default function cavemanExtension(pi: ExtensionAPI) {
 		persistMode(nextMode);
 		if (!notify) return;
 		if (nextMode === "off") {
+			ctx.ui.setStatus(STATUS_KEY, undefined);
 			ctx.ui.notify("Caveman mode off", "info");
 			return;
 		}
+		ctx.ui.setStatus(STATUS_KEY, nextMode);
 		ctx.ui.notify(`Caveman mode: ${nextMode}`, "info");
 	};
 
@@ -114,7 +101,13 @@ export default function cavemanExtension(pi: ExtensionAPI) {
 		}
 		if (!restoredFromSession) {
 			mode = config.defaultMode ?? "full";
-			if (mode !== "off") persistMode(mode);
+			if (mode !== "off") {
+				persistMode(mode);
+			}
+		}
+		// Set status bar indicator
+		if (mode !== "off") {
+			ctx.ui.setStatus(STATUS_KEY, mode);
 		}
 	});
 
@@ -122,13 +115,6 @@ export default function cavemanExtension(pi: ExtensionAPI) {
 		if (ctx.hasUI) {
 			ctx.ui.setStatus(STATUS_KEY, undefined);
 		}
-	});
-
-	pi.on("before_agent_start", async (event, _ctx) => {
-		if (mode === "off") return undefined;
-		return {
-			systemPrompt: event.systemPrompt + buildPrompt(mode),
-		};
 	});
 
 	pi.on("input", async (event, ctx) => {
@@ -142,8 +128,7 @@ export default function cavemanExtension(pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("caveman", {
-		description:
-			"Enable caveman mode: /caveman [lite|full|ultra|off]",
+		description: "Enable caveman mode: /caveman [lite|full|ultra|off]",
 		getArgumentCompletions: (prefix) => getAutocompleteItems(prefix),
 		handler: async (args, ctx) => {
 			const nextMode = normalizeMode(args);

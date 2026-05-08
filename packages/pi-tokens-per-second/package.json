@@ -1,5 +1,5 @@
 {
-	"name": "@kirdes/pi-custom-ui",
+	"name": "@kirdes/pi-tokens-per-second",
 	"private": true,
 	"type": "module",
 	"pi": {
