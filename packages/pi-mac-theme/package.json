@@ -1,0 +1,10 @@
+{
+  "name": "pi-mac-theme",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Auto-switch pi theme based on macOS dark mode",
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "pi-ask",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Rich interactive ask_user_question tool for pi",
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}

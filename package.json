@@ -22,7 +22,7 @@
 		"typescript": "^5.9.3"
 	},
 	"overrides": {
-    "zod-to-json-schema": "3.24.6"
-  },
-  "packageManager": "bun@1.2.13"
+		"zod-to-json-schema": "3.24.6"
+	},
+	"packageManager": "bun@1.2.13"
 }

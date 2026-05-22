@@ -29,8 +29,12 @@ function normalizeMode(value: string | undefined): CavemanMode | null {
 	const normalized = value.trim().toLowerCase();
 	if (!normalized) return "full";
 	if (LEVEL_SET.has(normalized)) return normalized as CavemanLevel;
-  if (normalized === "off" || normalized === "normal" || normalized === "stop") {
-    return "off";
+	if (
+		normalized === "off" ||
+		normalized === "normal" ||
+		normalized === "stop"
+	) {
+		return "off";
 	}
 	return null;
 }

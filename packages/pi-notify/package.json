@@ -1,0 +1,10 @@
+{
+  "name": "pi-notify",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Terminal notifications when pi agent finishes",
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}
