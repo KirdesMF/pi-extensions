@@ -1,10 +1,12 @@
 {
-  "name": "pi-usage",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "description": "Usage analytics command for pi sessions",
-  "pi": {
-    "extensions": ["./index.ts"]
-  }
+	"name": "pi-usage",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"description": "Usage analytics command for pi sessions",
+	"pi": {
+		"extensions": [
+			"./index.ts"
+		]
+	}
 }
