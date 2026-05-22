@@ -9,6 +9,10 @@ const DEFAULT_TIMEOUT_MS = 2000;
 const MAX_CACHE_ENTRIES = 200;
 const LC_ALL_PREFIX = "export LC_ALL=C";
 
+type GlobalRtkStatus = typeof globalThis & {
+	__piRtkRewriteStatus?: string;
+};
+
 type Config = {
 	enabledByDefault: boolean;
 	timeoutMs: number;
@@ -142,6 +146,7 @@ export default function rtkRewriteExtension(pi: ExtensionAPI) {
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
+		setGlobalStatus(undefined);
 		ctx.ui.setStatus(KEY, undefined);
 	});
 
@@ -221,11 +226,19 @@ export default function rtkRewriteExtension(pi: ExtensionAPI) {
 
 	function updateStatus(ctx: Pick<ExtensionContext, "ui">) {
 		if (!config.showStatus) {
+			setGlobalStatus(undefined);
 			ctx.ui.setStatus(KEY, undefined);
 			return;
 		}
-		ctx.ui.setStatus(KEY, buildStatusLine(sessionEnabled, rtkAvailable));
+		const status = buildStatusLine(sessionEnabled, rtkAvailable);
+		setGlobalStatus(status);
+		ctx.ui.setStatus(KEY, status);
 	}
+}
+
+function setGlobalStatus(status: string | undefined): void {
+	const global = globalThis as GlobalRtkStatus;
+	global.__piRtkRewriteStatus = status;
 }
 
 function withLcAll(command: string): string {

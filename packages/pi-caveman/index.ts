@@ -29,8 +29,9 @@ function normalizeMode(value: string | undefined): CavemanMode | null {
 	const normalized = value.trim().toLowerCase();
 	if (!normalized) return "full";
 	if (LEVEL_SET.has(normalized)) return normalized as CavemanLevel;
-	if (normalized === "off" || normalized === "normal" || normalized === "stop")
-		return "off";
+  if (normalized === "off" || normalized === "normal" || normalized === "stop") {
+    return "off";
+	}
 	return null;
 }
 
@@ -60,7 +61,7 @@ async function loadConfig(): Promise<CavemanConfig> {
 	return { defaultMode: "full" };
 }
 
-export default function cavemanExtension(pi: ExtensionAPI) {
+export default function (pi: ExtensionAPI) {
 	let mode: CavemanMode = "off";
 
 	const persistMode = (nextMode: CavemanMode) => {

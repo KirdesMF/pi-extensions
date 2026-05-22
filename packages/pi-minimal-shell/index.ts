@@ -46,6 +46,7 @@ const CONTEXT_ICON = "󰾆";
 const THINK_ICON = "󰔟";
 const CAVEMAN_ICON = "󰩪";
 const BRANCH_ICON = "󰘬";
+const RTK_REWRITE_STATUS_KEY = "rtk-rewrite";
 
 function stripAnsi(text: string): string {
 	return text.replace(ANSI_REGEX, "");
@@ -432,6 +433,7 @@ function buildHeaderLine(
 	const cavemanSegment = cavemanLabel
 		? `${theme.fg("dim", CAVEMAN_ICON)} ${theme.fg("dim", cavemanLabel)}`
 		: null;
+	const rtkSegment = getGlobalRtkRewriteStatus();
 	const segments = [
 		theme.fg("accent", "π"),
 		modelSegment,
@@ -440,6 +442,7 @@ function buildHeaderLine(
 		branchSegment,
 		contextSegment,
 		cavemanSegment,
+		rtkSegment,
 	].filter((segment): segment is string => Boolean(segment));
 
 	const active = [...segments];
@@ -479,6 +482,13 @@ function buildHeaderLine(
 	return truncateToWidth(active.join(separator), width);
 }
 
+function getGlobalRtkRewriteStatus(): string | null {
+	const global = globalThis as typeof globalThis & {
+		__piRtkRewriteStatus?: string;
+	};
+	return global.__piRtkRewriteStatus ?? null;
+}
+
 function buildFooterLine(
 	width: number,
 	theme: Theme,
@@ -492,7 +502,8 @@ function buildFooterLine(
 		? `${theme.fg("muted", `${providerLabel} => `)}${theme.fg("mdLinkUrl", renderLink("https://opencode.ai/auth", "dashboard"))}`
 		: theme.fg("muted", providerLabel);
 	const parts = [providerPart];
-	for (const status of statuses.values()) {
+	for (const [key, status] of statuses) {
+		if (key === "caveman" || key === RTK_REWRITE_STATUS_KEY) continue;
 		parts.push(status);
 	}
 	for (const window of usage?.windows ?? []) {
